@@ -11,6 +11,7 @@ import {
   normalizeTokenCount,
   calculateCostPerThousand,
   computeTokenCosts,
+  aggregateTimeSeriesBuckets,
 } from "./math.ts";
 
 describe("clamp", () => {
@@ -142,6 +143,37 @@ describe("computeTokenCosts and calculateCostPerThousand", () => {
     assert.strictEqual(costZeroTokens.inputCost, 0);
     assert.strictEqual(costZeroTokens.totalCost, 0);
     assert.strictEqual(costZeroTokens.costPerInputToken, 0);
+  });
+});
+
+describe("aggregateTimeSeriesBuckets", () => {
+  it("aligns misaligned timestamps into chronological buckets across aggregation modes", () => {
+    const pts = [
+      { timestampMs: 1200, value: 10 },
+      { timestampMs: 2050, value: 30 },
+      { timestampMs: 1800, value: 20 },
+      { timestampMs: NaN, value: 999 },
+      { timestampMs: 2500, value: Infinity },
+    ];
+
+    const meanBuckets = aggregateTimeSeriesBuckets(pts, 1000, "mean");
+    assert.deepStrictEqual(meanBuckets, [
+      { bucketStartMs: 1000, value: 15, count: 2 },
+      { bucketStartMs: 2000, value: 30, count: 1 },
+    ]);
+
+    const sumBuckets = aggregateTimeSeriesBuckets(pts, 1000, "sum");
+    assert.strictEqual(sumBuckets[0].value, 30);
+
+    const maxBuckets = aggregateTimeSeriesBuckets(pts, 1000, "max");
+    assert.strictEqual(maxBuckets[0].value, 20);
+  });
+
+  it("handles empty inputs and rejects non-positive bucket durations", () => {
+    assert.deepStrictEqual(aggregateTimeSeriesBuckets([], 1000), []);
+    assert.deepStrictEqual(aggregateTimeSeriesBuckets(null, 1000), []);
+    assert.throws(() => aggregateTimeSeriesBuckets([{ timestampMs: 0, value: 1 }], 0), RangeError);
+    assert.throws(() => aggregateTimeSeriesBuckets([{ timestampMs: 0, value: 1 }], NaN), RangeError);
   });
 });
 
