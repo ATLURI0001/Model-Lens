@@ -184,3 +184,71 @@ export function computeTokenCosts(
   };
 }
 
+export interface TimeSeriesPoint {
+  timestampMs: number;
+  value: number;
+}
+
+export interface TimeSeriesBucket {
+  bucketStartMs: number;
+  value: number;
+  count: number;
+}
+
+export type BucketAggregationMode = "mean" | "sum" | "max" | "min";
+
+/**
+ * Align and aggregate irregular or misaligned time-series metrics into fixed time buckets.
+ * Filters non-finite timestamps/values and returns buckets sorted chronologically.
+ */
+export function aggregateTimeSeriesBuckets(
+  points: TimeSeriesPoint[] | null | undefined,
+  bucketMs: number,
+  mode: BucketAggregationMode = "mean"
+): TimeSeriesBucket[] {
+  if (!Array.isArray(points) || points.length === 0) return [];
+  if (typeof bucketMs !== "number" || !Number.isFinite(bucketMs) || bucketMs <= 0) {
+    throw new RangeError(`bucketMs must be a positive finite number, got ${bucketMs}`);
+  }
+
+  const buckets = new Map<number, number[]>();
+  for (const pt of points) {
+    if (
+      !pt ||
+      typeof pt.timestampMs !== "number" ||
+      typeof pt.value !== "number" ||
+      !Number.isFinite(pt.timestampMs) ||
+      !Number.isFinite(pt.value)
+    ) {
+      continue;
+    }
+    const bucketStart = Math.floor(pt.timestampMs / bucketMs) * bucketMs;
+    const arr = buckets.get(bucketStart);
+    if (arr) {
+      arr.push(pt.value);
+    } else {
+      buckets.set(bucketStart, [pt.value]);
+    }
+  }
+
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([bucketStartMs, vals]) => {
+      let aggregated: number;
+      if (mode === "sum") {
+        aggregated = vals.reduce((acc, v) => acc + v, 0);
+      } else if (mode === "max") {
+        aggregated = Math.max(...vals);
+      } else if (mode === "min") {
+        aggregated = Math.min(...vals);
+      } else {
+        aggregated = mean(vals);
+      }
+      return {
+        bucketStartMs,
+        value: aggregated,
+        count: vals.length,
+      };
+    });
+}
+
