@@ -77,3 +77,110 @@ export function iqr(values: number[]): number {
   if (valid.length === 0) return 0;
   return percentile(valid, 0.75) - percentile(valid, 0.25);
 }
+
+/**
+ * Safely perform division with zero-division and non-finite value protection.
+ * Returns fallback if denominator is 0, NaN, or non-finite.
+ */
+export function safeDivide(numerator: number, denominator: number, fallback: number = 0): number {
+  if (
+    typeof numerator !== "number" ||
+    typeof denominator !== "number" ||
+    !Number.isFinite(numerator) ||
+    !Number.isFinite(denominator) ||
+    denominator === 0
+  ) {
+    return fallback;
+  }
+  const result = numerator / denominator;
+  return Number.isFinite(result) ? result : fallback;
+}
+
+/**
+ * Normalizes a raw token count into a non-negative integer.
+ */
+export function normalizeTokenCount(raw: unknown): number {
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw) || raw < 0) return 0;
+    return Math.floor(raw);
+  }
+  if (typeof raw === "string") {
+    const parsed = parseInt(raw.trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+  return 0;
+}
+
+export interface ModelPricing {
+  inputCostPerMillion?: number;
+  outputCostPerMillion?: number;
+  totalCostPerMillion?: number;
+}
+
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+export interface ComputedCost {
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
+  costPerInputToken: number;
+  costPerOutputToken: number;
+  costPerTotalToken: number;
+}
+
+/**
+ * Calculate cost per thousand tokens safely.
+ */
+export function calculateCostPerThousand(cost: number, tokens: number): number {
+  const normalizedTokens = normalizeTokenCount(tokens);
+  if (normalizedTokens === 0) return 0;
+  return (safeDivide(cost, normalizedTokens, 0) * 1000);
+}
+
+/**
+ * Compute detailed token costs from token usage and model pricing per million tokens.
+ * Handles missing rates, negative tokens, and zero rates safely.
+ */
+export function computeTokenCosts(
+  usage?: TokenUsage | null,
+  pricing?: ModelPricing | null
+): ComputedCost {
+  const inputTokens = normalizeTokenCount(usage?.inputTokens);
+  const outputTokens = normalizeTokenCount(usage?.outputTokens);
+  const totalTokens = usage?.totalTokens !== undefined
+    ? normalizeTokenCount(usage.totalTokens)
+    : inputTokens + outputTokens;
+
+  const inputRate = typeof pricing?.inputCostPerMillion === "number" && Number.isFinite(pricing.inputCostPerMillion)
+    ? Math.max(0, pricing.inputCostPerMillion)
+    : 0;
+
+  const outputRate = typeof pricing?.outputCostPerMillion === "number" && Number.isFinite(pricing.outputCostPerMillion)
+    ? Math.max(0, pricing.outputCostPerMillion)
+    : 0;
+
+  const inputCost = (inputTokens * inputRate) / 1_000_000;
+  const outputCost = (outputTokens * outputRate) / 1_000_000;
+
+  const totalRate = typeof pricing?.totalCostPerMillion === "number" && Number.isFinite(pricing.totalCostPerMillion)
+    ? Math.max(0, pricing.totalCostPerMillion)
+    : null;
+
+  const totalCost = totalRate !== null
+    ? (totalTokens * totalRate) / 1_000_000
+    : inputCost + outputCost;
+
+  return {
+    inputCost,
+    outputCost,
+    totalCost,
+    costPerInputToken: safeDivide(inputCost, inputTokens, 0),
+    costPerOutputToken: safeDivide(outputCost, outputTokens, 0),
+    costPerTotalToken: safeDivide(totalCost, totalTokens, 0),
+  };
+}
+
