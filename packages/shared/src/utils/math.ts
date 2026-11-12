@@ -21,7 +21,7 @@ function extractFiniteNumbers(values: number[]): number[] {
  */
 export function percentile(values: number[], p: number): number {
   const valid = extractFiniteNumbers(values);
-  if (valid.length === 0) return 0;
+  if (valid.length === 0 || typeof p !== "number" || !Number.isFinite(p)) return 0;
 
   // Support integer percentages (e.g., 95 -> 0.95)
   const normalizedP = p > 1 && p <= 100 ? p / 100 : p;
@@ -105,8 +105,10 @@ export function normalizeTokenCount(raw: unknown): number {
     return Math.floor(raw);
   }
   if (typeof raw === "string") {
-    const parsed = parseInt(raw.trim(), 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    const trimmed = raw.trim();
+    if (!/^[+-]?\d+$/.test(trimmed)) return 0;
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
   }
   return 0;
 }
@@ -222,7 +224,7 @@ export function aggregateTimeSeriesBuckets(
     ) {
       continue;
     }
-    const bucketStart = Math.floor(pt.timestampMs / bucketMs) * bucketMs;
+    const bucketStart = Math.floor(pt.timestampMs / bucketMs) * bucketMs || 0;
     const arr = buckets.get(bucketStart);
     if (arr) {
       arr.push(pt.value);
