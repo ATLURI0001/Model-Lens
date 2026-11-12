@@ -174,6 +174,22 @@ describe("aggregateTimeSeriesBuckets", () => {
     assert.deepStrictEqual(aggregateTimeSeriesBuckets(null, 1000), []);
     assert.throws(() => aggregateTimeSeriesBuckets([{ timestampMs: 0, value: 1 }], 0), RangeError);
     assert.throws(() => aggregateTimeSeriesBuckets([{ timestampMs: 0, value: 1 }], NaN), RangeError);
+
+    const negZero = aggregateTimeSeriesBuckets([{ timestampMs: -0, value: 5 }], 1000);
+    assert.ok(Object.is(negZero[0].bucketStartMs, 0));
+  });
+});
+
+describe("percentile and normalizeTokenCount edge cases", () => {
+  it("returns 0 instead of undefined when percentile p is non-finite", () => {
+    assert.strictEqual(percentile([10, 20, 30], Number.NaN), 0);
+    assert.strictEqual(percentile([10, 20, 30], Number.POSITIVE_INFINITY), 0);
+  });
+
+  it("rejects partial numeric prefix strings in normalizeTokenCount", () => {
+    assert.strictEqual(normalizeTokenCount("42abc"), 0);
+    assert.strictEqual(normalizeTokenCount("12px"), 0);
+    assert.strictEqual(normalizeTokenCount("  128  "), 128);
   });
 });
 
