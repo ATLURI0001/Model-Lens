@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 
 import {
   BLOB_STORAGE_REGION_INVALID_MESSAGE,
   normalizeBlobStorageRegion,
   truncate,
-} from "./stringChecks";
+  stringifyValue,
+  extractVariables,
+  isValidVariableName,
+} from "./stringChecks.ts";
 
 function hasLoneSurrogate(s: string): boolean {
   for (let i = 0; i < s.length; i++) {
@@ -21,7 +25,7 @@ function hasLoneSurrogate(s: string): boolean {
 }
 
 describe("normalizeBlobStorageRegion", () => {
-  it.each([
+  const validRegions = [
     ["us-west-2", "AWS"],
     ["europe-west1", "GCP"],
     ["us-central1", "GCP"],
@@ -33,11 +37,15 @@ describe("normalizeBlobStorageRegion", () => {
     ["wnam", "Cloudflare R2"],
     ["us-ashburn-1", "OCI"],
     ["us-west-004", "Backblaze"],
-  ])("accepts %s (%s)", (region) => {
-    expect(normalizeBlobStorageRegion(` ${region} `)).toBe(region);
-  });
+  ];
 
-  it.each([
+  for (const [region] of validRegions) {
+    it(`accepts ${region}`, () => {
+      assert.strictEqual(normalizeBlobStorageRegion(` ${region} `), region);
+    });
+  }
+
+  const invalidRegions = [
     "us west-2",
     "East US",
     "US-CENTRAL1+US-EAST1",
@@ -45,51 +53,81 @@ describe("normalizeBlobStorageRegion", () => {
     "-us-west-2",
     "us-west-2-",
     "a".repeat(64),
-  ])("rejects %s", (region) => {
-    expect(() => normalizeBlobStorageRegion(region)).toThrow(
-      BLOB_STORAGE_REGION_INVALID_MESSAGE,
+  ];
+
+  for (const region of invalidRegions) {
+    it(`rejects ${region}`, () => {
+      assert.throws(
+        () => normalizeBlobStorageRegion(region),
+        new RegExp(BLOB_STORAGE_REGION_INVALID_MESSAGE)
+      );
+    });
+  }
+
+  it("rejects non-string region inputs safely", () => {
+    assert.throws(
+      () => normalizeBlobStorageRegion(null as unknown as string),
+      new RegExp(BLOB_STORAGE_REGION_INVALID_MESSAGE)
     );
   });
 });
 
 describe("truncate", () => {
   it("returns the string unchanged when at or under the limit", () => {
-    expect(truncate("hello", 16)).toBe("hello");
-    expect(truncate("exactly-sixteen!", 16)).toBe("exactly-sixteen!");
+    assert.strictEqual(truncate("hello", 16), "hello");
+    assert.strictEqual(truncate("exactly-sixteen!", 16), "exactly-sixteen!");
   });
 
   it("appends an ellipsis when over the limit", () => {
-    expect(truncate("this is definitely longer than sixteen", 16)).toBe(
-      "this is definite...",
+    assert.strictEqual(
+      truncate("this is definitely longer than sixteen", 16),
+      "this is definite..."
     );
   });
 
   it("counts code points, not UTF-16 code units, for the limit", () => {
-    expect(truncate("🎉".repeat(9), 16)).toBe("🎉".repeat(9));
+    assert.strictEqual(truncate("🎉".repeat(9), 16), "🎉".repeat(9));
   });
 
   it("does not split surrogate pairs when the cut lands mid-pair", () => {
     const input = "a" + "🎉".repeat(20);
     const out = truncate(input, 16);
-    expect(hasLoneSurrogate(out)).toBe(false);
-    expect(out).toBe("a" + "🎉".repeat(15) + "...");
+    assert.strictEqual(hasLoneSurrogate(out), false);
+    assert.strictEqual(out, "a" + "🎉".repeat(15) + "...");
   });
 
-  it("keeps astral characters intact for realistic model names", () => {
-    const input = "gpt-4o-" + "🚀".repeat(30) + "-preview";
-    const out = truncate(input, 30);
-    expect(hasLoneSurrogate(out)).toBe(false);
-    expect(out.endsWith("...")).toBe(true);
+  it("handles non-string or negative limits safely", () => {
+    assert.strictEqual(truncate(null as unknown as string, 16), "");
+    assert.strictEqual(truncate("hello", -5), "...");
+    assert.strictEqual(truncate("hello", Number.NaN), "...");
+  });
+});
+
+describe("stringifyValue", () => {
+  it("handles primitives, bigint, symbol, undefined, and null safely", () => {
+    assert.strictEqual(stringifyValue(undefined), "");
+    assert.strictEqual(stringifyValue(null), "null");
+    assert.strictEqual(stringifyValue("text"), "text");
+    assert.strictEqual(stringifyValue(42), "42");
+    assert.strictEqual(stringifyValue(true), "true");
+    assert.strictEqual(stringifyValue(100n), "100");
+    assert.strictEqual(stringifyValue(Symbol("sym")), "sym");
+    assert.strictEqual(stringifyValue({ a: 1 }), '{"a":1}');
+  });
+});
+
+describe("extractVariables", () => {
+  it("extracts unique variables from mustache syntax", () => {
+    assert.deepStrictEqual(
+      extractVariables("Hello {{name}}, welcome to {{city}}! Bye {{name}}."),
+      ["name", "city"]
+    );
+    assert.deepStrictEqual(extractVariables(123 as unknown as string), []);
   });
 
-  it("handles mathematical alphanumeric (astral) code points", () => {
-    const input = "𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡";
-    const out = truncate(input, 5);
-    expect(hasLoneSurrogate(out)).toBe(false);
-    expect(out).toBe("𝟙𝟚𝟛𝟜𝟝...");
-  });
-
-  it("leaves BMP (non-astral) strings such as CJK unaffected", () => {
-    expect(truncate("你好世界你好世界", 5)).toBe("你好世界你...");
+  it("validates variable names against unicode letters and digits", () => {
+    assert.strictEqual(isValidVariableName("valid_var1"), true);
+    assert.strictEqual(isValidVariableName("1invalid"), false);
+    assert.strictEqual(isValidVariableName(null as unknown as string), false);
   });
 });

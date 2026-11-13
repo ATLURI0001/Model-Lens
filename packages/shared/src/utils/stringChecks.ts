@@ -27,6 +27,9 @@ export const BLOB_STORAGE_REGION_INVALID_MESSAGE =
   "Region must be 1-63 letters, numbers, or hyphens, and cannot start or end with a hyphen";
 
 export function normalizeBlobStorageRegion(region: string): string {
+  if (typeof region !== "string") {
+    throw new Error(BLOB_STORAGE_REGION_INVALID_MESSAGE);
+  }
   const normalizedRegion = region.trim();
   if (!BLOB_STORAGE_REGION_REGEX.test(normalizedRegion)) {
     throw new Error(BLOB_STORAGE_REGION_INVALID_MESSAGE);
@@ -35,10 +38,14 @@ export function normalizeBlobStorageRegion(region: string): string {
 }
 
 export function isValidVariableName(variable: string): boolean {
+  if (typeof variable !== "string") return false;
   return VARIABLE_REGEX.test(variable);
 }
 
 export function extractVariables(mustacheString: string): string[] {
+  if (typeof mustacheString !== "string") {
+    return [];
+  }
   const matches = Array.from(mustacheString.matchAll(MUSTACHE_REGEX))
     .map((match) => match[1])
     .filter(isValidVariableName);
@@ -46,31 +53,40 @@ export function extractVariables(mustacheString: string): string[] {
   return [...new Set(matches)];
 }
 
-export function stringifyValue(value: unknown) {
+export function stringifyValue(value: unknown): string {
+  if (value === undefined) {
+    return "";
+  }
+  if (value === null) {
+    return "null";
+  }
   switch (typeof value) {
     case "string":
       return value;
     case "number":
-      return value.toString();
     case "boolean":
+    case "bigint":
       return value.toString();
+    case "symbol":
+      return value.description ?? "";
     default:
-      return JSON.stringify(value);
+      try {
+        const json = JSON.stringify(value);
+        return json !== undefined ? json : "";
+      } catch {
+        return String(value);
+      }
   }
 }
 
-export function truncate(str: string, n = 16) {
-  // '...' suffix if the string is longer than n.
-  // Iterate by code point (Array.from) rather than UTF-16 code unit
-  // (String.prototype.substring) so that characters outside the Basic
-  // Multilingual Plane - emoji, CJK extension-B ideographs, mathematical
-  // alphanumerics, etc. - are never split mid-surrogate-pair. Cutting a
-  // surrogate pair in half leaves a lone surrogate that renders as the
-  // Unicode replacement character (U+FFFD). See issue #16172.
-  // Note: `n` counts code points, not UTF-16 code units.
+export function truncate(str: string, n = 16): string {
+  if (typeof str !== "string") {
+    return "";
+  }
+  const limit = typeof n === "number" && Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
   const codePoints = Array.from(str);
-  if (codePoints.length > n) {
-    return codePoints.slice(0, n).join("") + "...";
+  if (codePoints.length > limit) {
+    return codePoints.slice(0, limit).join("") + "...";
   }
   return str;
 }
