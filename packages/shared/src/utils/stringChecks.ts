@@ -47,7 +47,7 @@ export function extractVariables(mustacheString: string): string[] {
     return [];
   }
   const matches = Array.from(mustacheString.matchAll(MUSTACHE_REGEX))
-    .map((match) => match[1])
+    .map((match) => match[1].trim())
     .filter(isValidVariableName);
 
   return [...new Set(matches)];
@@ -70,8 +70,13 @@ export function stringifyValue(value: unknown): string {
     case "symbol":
       return value.description ?? "";
     default:
+      if (value instanceof Error) {
+        return value.message || String(value);
+      }
       try {
-        const json = JSON.stringify(value);
+        const json = JSON.stringify(value, (_k, v) =>
+          typeof v === "bigint" ? v.toString() : v,
+        );
         return json !== undefined ? json : "";
       } catch {
         return String(value);
