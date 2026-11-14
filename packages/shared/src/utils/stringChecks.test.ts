@@ -114,6 +114,14 @@ describe("stringifyValue", () => {
     assert.strictEqual(stringifyValue(Symbol("sym")), "sym");
     assert.strictEqual(stringifyValue({ a: 1 }), '{"a":1}');
   });
+
+  it("handles nested BigInt inside objects and Error instances safely", () => {
+    assert.strictEqual(
+      stringifyValue({ count: 999999999999999999n }),
+      '{"count":"999999999999999999"}'
+    );
+    assert.strictEqual(stringifyValue(new Error("custom error")), "custom error");
+  });
 });
 
 describe("extractVariables", () => {
@@ -123,6 +131,13 @@ describe("extractVariables", () => {
       ["name", "city"]
     );
     assert.deepStrictEqual(extractVariables(123 as unknown as string), []);
+  });
+
+  it("extracts variables with surrounding whitespace inside braces", () => {
+    assert.deepStrictEqual(
+      extractVariables("Hello {{ name }} and {{   user_role   }}!"),
+      ["name", "user_role"]
+    );
   });
 
   it("validates variable names against unicode letters and digits", () => {
