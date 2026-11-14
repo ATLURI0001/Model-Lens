@@ -1,4 +1,5 @@
 export function getIsCharOrUnderscore(value: string): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
   const charOrUnderscore = /^[\p{L}\p{N}_]+$/u;
 
   return charOrUnderscore.test(value);
