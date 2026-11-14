@@ -8,6 +8,7 @@ import {
   stringifyValue,
   extractVariables,
   isValidVariableName,
+  getIsCharOrUnderscore,
 } from "./stringChecks.ts";
 
 function hasLoneSurrogate(s: string): boolean {
@@ -144,5 +145,27 @@ describe("extractVariables", () => {
     assert.strictEqual(isValidVariableName("valid_var1"), true);
     assert.strictEqual(isValidVariableName("1invalid"), false);
     assert.strictEqual(isValidVariableName(null as unknown as string), false);
+  });
+});
+
+describe("getIsCharOrUnderscore", () => {
+  it("returns true for alphanumeric characters and underscores", () => {
+    assert.strictEqual(getIsCharOrUnderscore("abc"), true);
+    assert.strictEqual(getIsCharOrUnderscore("123"), true);
+    assert.strictEqual(getIsCharOrUnderscore("foo_bar_42"), true);
+    assert.strictEqual(getIsCharOrUnderscore("日本語_42"), true);
+  });
+
+  it("returns false for non-string, empty, null, and undefined values", () => {
+    assert.strictEqual(getIsCharOrUnderscore(""), false);
+    assert.strictEqual(getIsCharOrUnderscore(null as unknown as string), false);
+    assert.strictEqual(getIsCharOrUnderscore(undefined as unknown as string), false);
+    assert.strictEqual(getIsCharOrUnderscore(123 as unknown as string), false);
+  });
+
+  it("returns false for strings containing whitespace or punctuation", () => {
+    assert.strictEqual(getIsCharOrUnderscore("foo bar"), false);
+    assert.strictEqual(getIsCharOrUnderscore("foo-bar"), false);
+    assert.strictEqual(getIsCharOrUnderscore("foo.bar"), false);
   });
 });
