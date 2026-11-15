@@ -9,6 +9,9 @@ import {
   extractVariables,
   isValidVariableName,
   getIsCharOrUnderscore,
+  stripAnsiCodes,
+  isAlphanumeric,
+  safeJsonParse,
 } from "./stringChecks.ts";
 
 function hasLoneSurrogate(s: string): boolean {
@@ -167,5 +170,33 @@ describe("getIsCharOrUnderscore", () => {
     assert.strictEqual(getIsCharOrUnderscore("foo bar"), false);
     assert.strictEqual(getIsCharOrUnderscore("foo-bar"), false);
     assert.strictEqual(getIsCharOrUnderscore("foo.bar"), false);
+  });
+});
+
+describe("stripAnsiCodes", () => {
+  it("strips ANSI escape sequences and colors", () => {
+    assert.strictEqual(stripAnsiCodes("\u001b[31mRed Alert\u001b[0m"), "Red Alert");
+    assert.strictEqual(stripAnsiCodes("\u001b[1;32mBold Green\u001b[0m"), "Bold Green");
+    assert.strictEqual(stripAnsiCodes("plain text"), "plain text");
+    assert.strictEqual(stripAnsiCodes(null as unknown as string), "");
+  });
+});
+
+describe("isAlphanumeric", () => {
+  it("validates ASCII alphanumeric characters", () => {
+    assert.strictEqual(isAlphanumeric("abcXYZ123"), true);
+    assert.strictEqual(isAlphanumeric(""), false);
+    assert.strictEqual(isAlphanumeric("abc_123"), false);
+    assert.strictEqual(isAlphanumeric("hello world"), false);
+    assert.strictEqual(isAlphanumeric(123 as unknown as string), false);
+  });
+});
+
+describe("safeJsonParse", () => {
+  it("safely parses JSON or returns fallback", () => {
+    assert.deepStrictEqual(safeJsonParse('{"a":1}', {}), { a: 1 });
+    assert.deepStrictEqual(safeJsonParse('invalid json', { fallback: true }), { fallback: true });
+    assert.deepStrictEqual(safeJsonParse('', { fallback: true }), { fallback: true });
+    assert.deepStrictEqual(safeJsonParse(null as unknown as string, 42), 42);
   });
 });
