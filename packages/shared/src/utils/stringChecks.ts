@@ -96,3 +96,24 @@ export function truncate(str: string, n = 16): string {
   }
   return str;
 }
+
+export function stripAnsiCodes(str: string): string {
+  if (typeof str !== "string") return "";
+  return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "");
+}
+
+export function isAlphanumeric(value: string): boolean {
+  if (typeof value !== "string" || value.length === 0) return false;
+  return /^[a-zA-Z0-9]+$/.test(value);
+}
+
+export function safeJsonParse<T>(raw: string, fallback: T): T {
+  if (typeof raw !== "string") return fallback;
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return fallback;
+  }
+}
