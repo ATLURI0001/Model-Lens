@@ -12,6 +12,9 @@ import {
   stripAnsiCodes,
   isAlphanumeric,
   safeJsonParse,
+  isValidUrl,
+  normalizeHeaderName,
+  sanitizeCsvCell,
 } from "./stringChecks.ts";
 
 function hasLoneSurrogate(s: string): boolean {
@@ -200,3 +203,38 @@ describe("safeJsonParse", () => {
     assert.deepStrictEqual(safeJsonParse(null as unknown as string, 42), 42);
   });
 });
+
+describe("isValidUrl", () => {
+  it("validates standard web URLs and rejects disallowed protocols", () => {
+    assert.strictEqual(isValidUrl("https://example.com/api/v1"), true);
+    assert.strictEqual(isValidUrl("http://localhost:3000"), true);
+    assert.strictEqual(isValidUrl("javascript:alert(1)"), false);
+    assert.strictEqual(isValidUrl("data:text/plain;base64,SGVsbG8="), false);
+    assert.strictEqual(isValidUrl("not-a-url"), false);
+    assert.strictEqual(isValidUrl(""), false);
+    assert.strictEqual(isValidUrl("ftp://files.example.com", ["ftp:"]), true);
+  });
+});
+
+describe("normalizeHeaderName", () => {
+  it("normalizes and validates standard HTTP header names", () => {
+    assert.strictEqual(normalizeHeaderName("  Content-Type  "), "content-type");
+    assert.strictEqual(normalizeHeaderName("X-Custom-Token"), "x-custom-token");
+    assert.throws(() => normalizeHeaderName("Invalid Header!"), /Invalid HTTP header token/);
+    assert.throws(() => normalizeHeaderName(""), /Invalid HTTP header token/);
+    assert.throws(() => normalizeHeaderName(123 as unknown as string), /Header name must be a string/);
+  });
+});
+
+describe("sanitizeCsvCell", () => {
+  it("guards against formula injection and escapes delimiters", () => {
+    assert.strictEqual(sanitizeCsvCell("regular text"), "regular text");
+    assert.strictEqual(sanitizeCsvCell("=1+1"), "'=1+1");
+    assert.strictEqual(sanitizeCsvCell("+cmd|' /C calc'!A0"), "'+cmd|' /C calc'!A0");
+    assert.strictEqual(sanitizeCsvCell("@SUM(A1:A10)"), "'@SUM(A1:A10)");
+    assert.strictEqual(sanitizeCsvCell('quotes "inside"'), '"quotes ""inside"""');
+    assert.strictEqual(sanitizeCsvCell("comma, separated"), '"comma, separated"');
+    assert.strictEqual(sanitizeCsvCell(123), "123");
+  });
+});
+

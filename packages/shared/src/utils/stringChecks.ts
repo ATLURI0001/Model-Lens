@@ -117,3 +117,40 @@ export function safeJsonParse<T>(raw: string, fallback: T): T {
     return fallback;
   }
 }
+
+export function isValidUrl(
+  urlString: string,
+  allowedProtocols: string[] = ["http:", "https:"]
+): boolean {
+  if (typeof urlString !== "string" || !urlString.trim()) return false;
+  try {
+    const parsed = new URL(urlString.trim());
+    return allowedProtocols.includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeHeaderName(header: string): string {
+  if (typeof header !== "string") {
+    throw new TypeError("Header name must be a string");
+  }
+  const trimmed = header.trim().toLowerCase();
+  if (!trimmed || !/^[!#$%&'*+\-.^_`|~0-9a-zA-Z]+$/.test(trimmed)) {
+    throw new Error(`Invalid HTTP header token: ${header}`);
+  }
+  return trimmed;
+}
+
+export function sanitizeCsvCell(value: unknown): string {
+  const str = stringifyValue(value);
+  if (!str) return "";
+  // Guard against CSV formula injection
+  const formulaPrefixes = ["=", "+", "-", "@", "\t", "\r"];
+  let safeStr = formulaPrefixes.includes(str[0]) ? `'${str}` : str;
+  if (safeStr.includes('"') || safeStr.includes(",") || safeStr.includes("\n") || safeStr.includes("\r")) {
+    return `"${safeStr.replace(/"/g, '""')}"`;
+  }
+  return safeStr;
+}
+
